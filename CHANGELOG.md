@@ -1,3 +1,7 @@
+## 1.2.1
+* Allow nonce to be public key signed.
+* Allow to digest created_at field.
+
 ## master
 
 * Fix: [#2](https://github.com/savonrb/akami/pull/2) Fixes related to WS-Security,
