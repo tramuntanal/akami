@@ -46,7 +46,12 @@ module Akami
       self.digest = digest
     end
 
-    attr_accessor :username, :password, :created_at, :expires_at, :signature, :verify_response
+    attr_accessor :username, :password, :created_at, :expires_at, :signature, :verify_response, :digest_fields
+
+    # indicate to cipher the nonce
+    def cipher_nonce pki
+      @pki= pki
+    end
 
     def sign_with=(klass)
       @signature = klass
@@ -111,10 +116,19 @@ module Akami
     # Returns a Hash containing wsse:UsernameToken details.
     def wsse_username_token
       if digest?
+#        nonce= self.nonce
+        tstmp= timestamp
+        if defined?(@digest_fields) and @digest_fields.include?(:created_at)
+          tstmp= digest_created_at
+        end
+        _nonce= nonce
+        if defined?(@pki) and !@pki.nil?
+          _nonce= @pki.public_encrypt(_nonce)
+        end
         token = security_hash :wsse, "UsernameToken",
           "wsse:Username" => username,
-          "wsse:Nonce" => Base64.encode64(nonce),
-          "wsu:Created" => timestamp,
+          "wsse:Nonce" => Base64.encode64(_nonce),
+          "wsu:Created" => tstmp,
           "wsse:Password" => digest_password,
           :attributes! => { "wsse:Password" => { "Type" => PASSWORD_DIGEST_URI } }
         # clear the nonce after each use
@@ -173,6 +187,10 @@ module Akami
     def digest_password
       token = nonce + timestamp + password
       Base64.encode64(Digest::SHA1.digest(token)).chomp!
+    end
+
+    def digest_created_at
+      Base64.encode64(Digest::SHA1.digest(timestamp)).chomp!
     end
 
     # Returns a WSSE nonce.

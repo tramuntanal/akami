@@ -250,6 +250,75 @@ describe Akami do
         wsse.to_xml.should include("username", "password")
       end
     end
+
+    context "with credentials and digest auth and ciphered elements " do
+      before {
+        wsse.credentials "username", "password", :ciphered_digest
+        wsse.digest_fields= [:created_at]
+        certificate= OpenSSL::X509::Certificate.new resource_read('akami.crt')
+        wsse.cipher_nonce OpenSSL::PKey::RSA.new(certificate.public_key)
+      }
+
+      it "contains the WSE and WSU namespaces" do
+        wsse.to_xml.should include(Akami::WSSE::WSE_NAMESPACE, Akami::WSSE::WSU_NAMESPACE)
+      end
+
+      it "contains the username" do
+        wsse.to_xml.should include("username")
+      end
+
+      it "does not contain the (original) password" do
+        wsse.to_xml.should_not include("password")
+      end
+
+      it "contains a wsse:Nonce tag" do
+        wsse.to_xml.should match(/<wsse:Nonce>[^<]+<\/wsse:Nonce>/)
+      end
+
+      it "does not contain the plain created_at value" do
+        created_at = Time.now
+        Timecop.freeze created_at do
+          wsse.to_xml.should_not include("<wsu:Created>#{created_at.utc.xmlschema}</wsu:Created>")
+        end
+      end
+
+      it "contains a properly hashed wsu:Created tag" do
+        created_at = Time.now
+        Timecop.freeze created_at do
+          xml_header = Nokogiri::XML(wsse.to_xml)
+          xml_header.remove_namespaces!
+          created_at_hash = Base64.decode64(xml_header.xpath('//Created').first.content)
+          created_at_hash.should == Digest::SHA1.digest(created_at.utc.xmlschema)
+        end
+      end
+
+      it "contains the PasswordDigest type attribute" do
+        wsse.to_xml.should include(Akami::WSSE::PASSWORD_DIGEST_URI)
+      end
+
+      it "should reset the nonce every time" do
+        created_at = Time.now
+        Timecop.freeze created_at do
+          nonce_regexp = /<wsse:Nonce>([^<]+)<\/wsse:Nonce>/
+          nonce_first = Base64.decode64(nonce_regexp.match(wsse.to_xml)[1])
+          nonce_second = Base64.decode64(nonce_regexp.match(wsse.to_xml)[1])
+          nonce_first.should_not == nonce_second
+        end
+      end
+
+      it "has contains a properly hashed password" do
+        created_at = Time.now
+        Timecop.freeze created_at do
+          xml_header = Nokogiri::XML(wsse.to_xml)
+          xml_header.remove_namespaces!
+          nonce= Base64.decode64(xml_header.xpath('//Nonce').first.content)
+          pki= OpenSSL::PKey::RSA.new(resource_read('akami.key'), 'test')
+          nonce= pki.private_decrypt(nonce)
+          password_hash = Base64.decode64(xml_header.xpath('//Password').first.content)
+          password_hash.should == Digest::SHA1.digest((nonce + created_at.utc.xmlschema + "password"))
+        end
+      end
+    end
   end
 
 end
