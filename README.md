@@ -1,7 +1,7 @@
 Akami [![Build Status](http://travis-ci.org/savonrb/akami.png)](http://travis-ci.org/savonrb/akami)
 =====
 
-Building Web Service Security.
+Building Web Service Security. This fork is to allow Nonce to be signed and Created to be digested.
 
 
 Installation
