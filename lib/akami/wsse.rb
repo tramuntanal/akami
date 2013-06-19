@@ -185,22 +185,30 @@ module Akami
 
     # Returns the WSSE password, encrypted for digest authentication.
     def digest_password
-      token = nonce + timestamp + password
-      Base64.encode64(Digest::SHA1.digest(token)).chomp!
+      digest(password)
     end
 
     def digest_created_at
-      Base64.encode64(Digest::SHA1.digest(timestamp)).chomp!
+      digest(timestamp)
+    end
+    def digest data
+      #      Base64.encode64(Digest::SHA1.digest(data)).chomp!
+      cipher= OpenSSL::Cipher::Cipher.new("AES-128-ECB").encrypt
+      cipher.key= nonce
+      dg_data= Base64.encode64(cipher.update(data) + cipher.final).chomp!
+      cipher= OpenSSL::Cipher::Cipher.new("AES-128-ECB").decrypt
+      cipher.key= nonce
+      puts cipher.update(Base64.decode64(dg_data)) + cipher.final
+      dg_data
     end
 
     # Returns a WSSE nonce.
     def nonce
-      @nonce ||= Digest::SHA1.hexdigest random_string + timestamp
-    end
-
-    # Returns a random String of 100 characters.
-    def random_string
-      (0...100).map { ("a".."z").to_a[rand(26)] }.join
+      return @nonce if @nonce
+      cipher = OpenSSL::Cipher::AES128.new('ECB')
+      cipher.encrypt
+      key = cipher.random_key
+      @nonce= key
     end
 
     # Returns a WSSE timestamp.
