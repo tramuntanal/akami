@@ -116,7 +116,6 @@ module Akami
     # Returns a Hash containing wsse:UsernameToken details.
     def wsse_username_token
       if digest?
-#        nonce= self.nonce
         tstmp= timestamp
         if defined?(@digest_fields) and @digest_fields.include?(:created_at)
           tstmp= digest_created_at
@@ -192,14 +191,9 @@ module Akami
       digest(timestamp)
     end
     def digest data
-      #      Base64.encode64(Digest::SHA1.digest(data)).chomp!
       cipher= OpenSSL::Cipher::Cipher.new("AES-128-ECB").encrypt
       cipher.key= nonce
-      dg_data= Base64.encode64(cipher.update(data) + cipher.final).chomp!
-      cipher= OpenSSL::Cipher::Cipher.new("AES-128-ECB").decrypt
-      cipher.key= nonce
-      puts cipher.update(Base64.decode64(dg_data)) + cipher.final
-      dg_data
+      Base64.encode64(cipher.update(data) + cipher.final).chomp
     end
 
     # Returns a WSSE nonce.

@@ -176,9 +176,11 @@ describe Akami do
         xml_header = Nokogiri::XML(wsse.to_xml)
         xml_header.remove_namespaces!
         nonce = Base64.decode64(xml_header.xpath('//Nonce').first.content)
-        created_at = xml_header.xpath('//Created').first.content
-        password_hash = Base64.decode64(xml_header.xpath('//Password').first.content)
-        password_hash.should == Digest::SHA1.digest((nonce + created_at + "password"))
+        dg_data= Base64.decode64(xml_header.xpath('//Password').first.content)
+        cipher= OpenSSL::Cipher::Cipher.new("AES-128-ECB").decrypt
+        cipher.key= nonce
+        passwd= cipher.update(dg_data) + cipher.final
+        passwd.should == 'password'
       end
     end
 
@@ -253,7 +255,7 @@ describe Akami do
 
     context "with credentials and digest auth and ciphered elements " do
       before {
-        wsse.credentials "username", "password", :ciphered_digest
+        wsse.credentials "username", "password", :digest
         wsse.digest_fields= [:created_at]
         certificate= OpenSSL::X509::Certificate.new resource_read('akami.crt')
         wsse.cipher_nonce OpenSSL::PKey::RSA.new(certificate.public_key)
@@ -287,8 +289,13 @@ describe Akami do
         Timecop.freeze created_at do
           xml_header = Nokogiri::XML(wsse.to_xml)
           xml_header.remove_namespaces!
-          created_at_hash = Base64.decode64(xml_header.xpath('//Created').first.content)
-          created_at_hash.should == Digest::SHA1.digest(created_at.utc.xmlschema)
+          nonce = Base64.decode64(xml_header.xpath('//Nonce').first.content)
+          dg_data= Base64.decode64(xml_header.xpath('//Created').first.content)
+          cipher= OpenSSL::Cipher::Cipher.new("AES-128-ECB").decrypt
+          key = OpenSSL::PKey::RSA.new(resource_read('akami.key'), 'test')
+          cipher.key= key.private_decrypt(nonce)
+          created= cipher.update(dg_data) + cipher.final
+          created.should == created_at.utc.xmlschema
         end
       end
 
@@ -314,8 +321,11 @@ describe Akami do
           nonce= Base64.decode64(xml_header.xpath('//Nonce').first.content)
           pki= OpenSSL::PKey::RSA.new(resource_read('akami.key'), 'test')
           nonce= pki.private_decrypt(nonce)
-          password_hash = Base64.decode64(xml_header.xpath('//Password').first.content)
-          password_hash.should == Digest::SHA1.digest((nonce + created_at.utc.xmlschema + "password"))
+          password_hash = xml_header.xpath('//Password').first.content
+          cipher= OpenSSL::Cipher::Cipher.new("AES-128-ECB").decrypt
+          cipher.key= nonce
+          passwd= cipher.update(Base64.decode64(password_hash)) + cipher.final
+          passwd.should == 'password'
         end
       end
     end
