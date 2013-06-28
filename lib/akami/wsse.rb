@@ -111,6 +111,9 @@ module Akami
       end
     end
 
+    def get_nonce
+      nonce
+    end
   private
 
     # Returns a Hash containing wsse:UsernameToken details.
@@ -193,6 +196,7 @@ module Akami
     def digest data
       cipher= OpenSSL::Cipher::Cipher.new("AES-128-ECB").encrypt
       cipher.key= nonce
+      cipher.padding= OpenSSL::PKey::RSA::PKCS1_PADDING
       Base64.encode64(cipher.update(data) + cipher.final).chomp
     end
 
@@ -202,6 +206,7 @@ module Akami
       cipher = OpenSSL::Cipher::AES128.new('ECB')
       cipher.encrypt
       key = cipher.random_key
+#      puts "nonce: #{key.pretty_inspect.chomp}"
       @nonce= key
     end
 
